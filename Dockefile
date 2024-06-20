@@ -1,9 +1,14 @@
-# Use the official Nginx image as the base
-FROM nginx:latest
--files /usr/share/nginx/html
+# Use the official Node.js image as the base
+FROM node:14
 
-# Expose port 80
-EXPOSE 80
+# Set the working directory in the container
+WORKDIR /usr/src/app
 
-# Start Nginx when the container launches
-CMD ["nginx", "-g", "daemon off;"]
+# Copy package.json and package-lock.json files
+COPY package*.json ./
+
+# Install application dependencies
+RUN npm install
+
+# Make sure your scripts are executable
+RUN chmod +x ./jenkins/scripts/*.sh
