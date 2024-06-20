@@ -2,36 +2,67 @@ pipeline {
     agent any
     environment {
         CI = 'true'
+        DOCKER_IMAGE = 'my_nginx_image'
+        DOCKER_TAG = 'latest'
+        REGISTRY_CREDENTIALS = 'a782c2bc-47ea-4929-b865-3e8488b8e134'  // Jenkins credential ID for Docker Hub
     }
     stages {
-        stage('Build') {
+        stage('Checkout') {
             steps {
-                sh 'npm install'
+                // Checkout the code from the Git repository
+                checkout scm
             }
         }
-        stage('Test') {
+        stage('Build Docker Image') {
             steps {
-                sh './jenkins/scripts/test.sh'
+                script {
+                    // Build the Docker image
+                    def app = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                }
             }
         }
-        stage('Deliver for development') {
+        stage('Test Docker Image') {
+            steps {
+                script {
+                    // Run the Docker container to test if it starts correctly
+                    docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").inside {
+                        sh 'echo "Container started successfully"'
+                    }
+                }
+            }
+        }
+        stage('Deliver for Development') {
             when {
-                branch 'development' 
+                branch 'development'
             }
             steps {
-                sh './jenkins/scripts/deliver-for-development.sh'
-                input message: 'Finished using the web site? (Click "Proceed" to continue)'
-                sh './jenkins/scripts/kill.sh'
+                script {
+                    // Push the Docker image to the registry for development
+                    docker.withRegistry('', "${REGISTRY_CREDENTIALS}") {
+                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push("development")
+                    }
+                }
             }
         }
-        stage('Deploy for production') {
+        stage('Deploy for Production') {
             when {
-                branch 'production'  
+                branch 'production'
             }
             steps {
-                sh './jenkins/scripts/deploy-for-production.sh'
-                input message: 'Finished using the web site? (Click "Proceed" to continue)'
-                sh './jenkins/scripts/kill.sh'
+                script {
+                    // Push the Docker image to the registry for production
+                    docker.withRegistry('', "${REGISTRY_CREDENTIALS}") {
+                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push("production")
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            // Clean up the Docker image from the local Docker daemon
+            script {
+                sh "docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG}"
             }
         }
     }
